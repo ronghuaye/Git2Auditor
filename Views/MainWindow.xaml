@@ -1,0 +1,194 @@
+<Window x:Class="Git2Auditor.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+        xmlns:viewmodels="clr-namespace:Git2Auditor.ViewModels"
+        d:DataContext="{d:DesignInstance Type=viewmodels:MainViewModel}"
+        mc:Ignorable="d"
+        Title="Git2Auditor - 开源协作数据监控 Agent" Height="800" Width="1280"
+        Background="#1E1E1E" Foreground="#D4D4D4" FontFamily="Segoe UI" WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="Foreground" Value="#D4D4D4"/>
+            <Setter Property="BorderBrush" Value="#3F3F46"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="16,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#3E3E42"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#1C97EA"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="Foreground" Value="#D4D4D4"/>
+            <Setter Property="BorderBrush" Value="#3F3F46"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="4"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 顶部配置区 -->
+        <Border Grid.Row="0" BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,0,0,15">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <!-- PAT 和 全局操作 -->
+                <Grid Grid.Row="0" Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="300"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <TextBlock Text="GitHub PAT (Token):" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox Grid.Column="1" Text="{Binding Pat, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"/>
+                    
+                    <Button Grid.Column="3" Content="导入名单 (Import)" Command="{Binding ImportStudentsCommand}" Margin="10,0,0,0"/>
+                    <Button Grid.Column="4" Content="并发抓取 (Fetch)" Command="{Binding FetchDataCommand}" Margin="10,0,0,0"/>
+                    <Button Grid.Column="5" Content="导出台账 (Export)" Command="{Binding ExportExcelCommand}" Margin="10,0,0,0"/>
+                </Grid>
+
+                <!-- 各小组仓库配置 -->
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding GroupConfigs}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="4"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border BorderBrush="#333333" BorderThickness="1" Margin="0,0,10,0" Padding="10" Background="#252526">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding GroupId, StringFormat='第 {0} 小组仓库配置'}" FontWeight="Bold" Foreground="#007ACC" Margin="0,0,0,8"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        
+                                        <TextBlock Text="Owner:" VerticalAlignment="Center" Margin="0,0,5,5" FontSize="11"/>
+                                        <TextBox Grid.Column="1" Text="{Binding RepoOwner, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" FontSize="11" Background="#1E1E1E"/>
+                                        
+                                        <TextBlock Grid.Row="1" Text="Repo:" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="11"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding RepoName, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Background="#1E1E1E"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Border>
+
+        <!-- 主体数据区 -->
+        <Grid Grid.Row="1" Margin="0,15,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="6.5*"/>
+                <ColumnDefinition Width="15"/>
+                <ColumnDefinition Width="3.5*"/>
+            </Grid.ColumnDefinitions>
+
+            <DataGrid Grid.Column="0" ItemsSource="{Binding Records}" SelectedItem="{Binding SelectedRecord}"
+                      AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                      Background="Transparent" RowBackground="#1E1E1E" AlternatingRowBackground="#252526"
+                      Foreground="#D4D4D4" BorderBrush="#333333" BorderThickness="1"
+                      GridLinesVisibility="All" HorizontalGridLinesBrush="#333333" VerticalGridLinesBrush="#333333"
+                      HeadersVisibility="Column" SelectionMode="Single">
+                <DataGrid.Resources>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="Background" Value="#2D2D30"/>
+                        <Setter Property="Foreground" Value="#FFFFFF"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+                        <Setter Property="Padding" Value="8,6"/>
+                        <Setter Property="BorderBrush" Value="#333333"/>
+                        <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                    </Style>
+                    <Style TargetType="DataGridRow">
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#3E3E42"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#094771"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.Resources>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="组别" Binding="{Binding Student.GroupId}" Width="60"/>
+                    <DataGridTextColumn Header="姓名" Binding="{Binding Student.Name}" Width="80"/>
+                    <DataGridCheckBoxColumn Header="组长" Binding="{Binding Student.IsLeader}" Width="50"/>
+                    <DataGridTextColumn Header="GitHubID" Binding="{Binding Student.GitHubUsername}" Width="120"/>
+                    <DataGridTextColumn Header="Commits" Binding="{Binding Data.CommitsCount}" Width="80"/>
+                    <DataGridTextColumn Header="分配Issue" Binding="{Binding Data.IssuesAssigned}" Width="90"/>
+                    <DataGridTextColumn Header="解决率" Binding="{Binding Data.IssueResolveRate, StringFormat={}{0}%}" Width="80"/>
+                    <DataGridTextColumn Header="参与PR" Binding="{Binding Data.PrsParticipated}" Width="80"/>
+                    <DataGridTextColumn Header="健康度" Binding="{Binding Data.HealthScore}" Width="80"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <Border Grid.Column="1" Width="1" Background="#333333" HorizontalAlignment="Center" Margin="0,10"/>
+
+            <Border Grid.Column="2" BorderBrush="#333333" BorderThickness="1" Background="#252526">
+                <Grid>
+                    <TextBlock Text="个体协作多维画像" Foreground="#888888" Margin="15" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                    <lvc:PolarChart Series="{Binding RadarSeries}" AngleAxes="{Binding RadarAxes}" RadiusAxes="{Binding RadiusAxes}" Margin="20,40,20,20" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <StatusBar Grid.Row="2" Background="#007ACC" Foreground="#FFFFFF" Margin="-20,15,-20,-20" Padding="20,5">
+            <StatusBarItem>
+                <TextBlock Text="{Binding StatusMessage}"/>
+            </StatusBarItem>
+            <StatusBarItem HorizontalAlignment="Right">
+                <ProgressBar IsIndeterminate="{Binding IsBusy}" Width="100" Height="4" 
+                             Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</Window>
