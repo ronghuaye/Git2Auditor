@@ -176,7 +176,7 @@
             <Border Grid.Column="2" BorderBrush="#333333" BorderThickness="1" Background="#252526">
                 <Grid>
                     <TextBlock Text="个体协作多维画像" Foreground="#888888" Margin="15" HorizontalAlignment="Left" VerticalAlignment="Top"/>
-                    <lvc:PolarChart Series="{Binding RadarSeries}" AngleAxes="{Binding RadarAxes}" RadiusAxes="{Binding RadiusAxes}" Margin="20,40,20,20" />
+                    <lvc:PolarChart Series="{Binding RadarSeries}" AngleAxes="{Binding RadarAxes}" RadiusAxes="{Binding RadiusAxes}" TooltipTextPaint="{Binding TooltipTextPaint}" Margin="20,40,20,20" />
                 </Grid>
             </Border>
         </Grid>

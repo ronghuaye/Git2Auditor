@@ -4,6 +4,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Git2Auditor.Services;
 using Git2Auditor.ViewModels;
 using Git2Auditor.Views;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
+using SkiaSharp;
 
 namespace Git2Auditor;
 

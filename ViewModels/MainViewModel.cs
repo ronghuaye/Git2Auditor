@@ -62,6 +62,11 @@ public partial class MainViewModel : ObservableObject
         }
     };
 
+    [ObservableProperty] private SolidColorPaint tooltipTextPaint = new SolidColorPaint(SKColors.White)
+    {
+        FontFamily = "Microsoft YaHei"
+    };
+
     private StudentPerformanceRecord? _selectedRecord;
     public StudentPerformanceRecord? SelectedRecord
     {
