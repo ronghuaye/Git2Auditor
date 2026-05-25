@@ -35,11 +35,12 @@ public partial class MainViewModel : ObservableObject
         new PolarAxis 
         { 
             LabelsRotation = 0,
-            LabelsPaint = new SolidColorPaint(SKColors.Gray)
+            TextSize = 13,
+            LabelsPaint = new SolidColorPaint(SKColors.DodgerBlue)
             {
                 FontFamily = "Microsoft YaHei"
             },
-            SeparatorsPaint = new SolidColorPaint(SKColors.DimGray) { StrokeThickness = 1 },
+            SeparatorsPaint = new SolidColorPaint(new SKColor(60, 60, 60)) { StrokeThickness = 0.5f },
             MinLimit = 0,
             MaxLimit = 100
         }
@@ -51,11 +52,13 @@ public partial class MainViewModel : ObservableObject
         new PolarAxis 
         { 
             Labels = new[] { "代码提交", "Issue参与", "Issue解决率", "PR贡献", "PR沟通" },
-            LabelsPaint = new SolidColorPaint(SKColors.LightGray)
+            TextSize = 15,
+            LabelsPaint = new SolidColorPaint(SKColors.DodgerBlue)
             {
-                FontFamily = "Microsoft YaHei"
+                FontFamily = "Microsoft YaHei",
+                SKFontStyle = new SKFontStyle(SKFontStyleWeight.Bold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
             },
-            SeparatorsPaint = new SolidColorPaint(SKColors.DimGray) { StrokeThickness = 1 }
+            SeparatorsPaint = new SolidColorPaint(new SKColor(60, 60, 60)) { StrokeThickness = 1 }
         }
     };
 
@@ -253,10 +256,10 @@ public partial class MainViewModel : ObservableObject
                 },
                 Name = record.Student.Name,
                 Stroke = new SolidColorPaint(SKColors.DodgerBlue) { StrokeThickness = 3 },
-                Fill = new SolidColorPaint(SKColors.DodgerBlue.WithAlpha(50)),
-                GeometrySize = 10,
-                GeometryFill = new SolidColorPaint(SKColors.White),
-                GeometryStroke = new SolidColorPaint(SKColors.DodgerBlue) { StrokeThickness = 2 }
+                Fill = new SolidColorPaint(SKColors.DodgerBlue.WithAlpha(40)),
+                GeometrySize = 6,
+                GeometryFill = new SolidColorPaint(SKColors.DodgerBlue),
+                GeometryStroke = new SolidColorPaint(SKColors.White) { StrokeThickness = 1 }
             }
         };
     }
