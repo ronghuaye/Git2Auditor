@@ -27,4 +27,5 @@ public class StudentPerformanceRecord
 {
     public StudentInfo Student { get; set; } = new();
     public CollaborationData Data { get; set; } = new();
+    public string Remarks { get; set; } = string.Empty;
 }

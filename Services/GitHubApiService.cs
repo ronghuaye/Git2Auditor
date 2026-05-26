@@ -17,18 +17,29 @@ public class GitHubApiService : IGitHubApiService
         };
 
         var allRecords = new List<StudentPerformanceRecord>();
-        var errors = new List<string>();
 
+        // 为了保证所有学生都能显示在表格中，按组别循环之前，先确保每个学生都有一个默认记录
         foreach (var config in groupConfigs)
         {
-            // 智能解析：如果用户误填了完整 URL，自动提取 Owner 和 Repo
-            var (owner, repo) = ParseOwnerAndRepo(config.RepoOwner, config.RepoName);
-
-            if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo))
-                continue;
-
             var groupStudents = students.Where(s => s.GroupId == config.GroupId).ToList();
             if (!groupStudents.Any()) continue;
+
+            var (owner, repo) = ParseOwnerAndRepo(config.RepoOwner, config.RepoName);
+
+            // 1. 仓库未配置检查
+            if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo))
+            {
+                foreach (var student in groupStudents)
+                {
+                    allRecords.Add(new StudentPerformanceRecord
+                    {
+                        Student = student,
+                        Data = new CollaborationData(),
+                        Remarks = "仓库地址未配置"
+                    });
+                }
+                continue;
+            }
 
             try
             {
@@ -45,7 +56,18 @@ public class GitHubApiService : IGitHubApiService
                 foreach (var student in groupStudents)
                 {
                     var username = student.GitHubUsername.Trim().ToLower();
-                    if (string.IsNullOrEmpty(username)) continue;
+                    
+                    // 2. 账号未填写检查
+                    if (string.IsNullOrEmpty(username))
+                    {
+                        allRecords.Add(new StudentPerformanceRecord
+                        {
+                            Student = student,
+                            Data = new CollaborationData(),
+                            Remarks = "GitHub账号未填写"
+                        });
+                        continue;
+                    }
 
                     var studentCommits = commits.Where(c => c.Author?.Login?.ToLower() == username).ToList();
                     var studentIssuesAssigned = issues.Where(i => i.Assignees.Any(a => a.Login.ToLower() == username)).ToList();
@@ -69,22 +91,48 @@ public class GitHubApiService : IGitHubApiService
 
                     data.HealthScore = CalculateHealthScore(data);
 
+                    // 3. 如果数据全为0，提示可能是账号错误
+                    string remark = "";
+                    if (data.CommitsCount == 0 && data.IssuesAssigned == 0 && data.PrsParticipated == 0)
+                    {
+                        remark = "无活动记录，请核对账号是否正确";
+                    }
+
                     allRecords.Add(new StudentPerformanceRecord
                     {
                         Student = student,
-                        Data = data
+                        Data = data,
+                        Remarks = remark
                     });
                 }
             }
             catch (Exception ex)
             {
-                errors.Add($"小组 {config.GroupId} ({owner}/{repo}): {ex.Message}");
+                // 4. API 异常处理（如仓库名错误，404等）
+                string errorMsg = ex.Message.Length > 30 ? ex.Message.Substring(0, 30) + "..." : ex.Message;
+                foreach (var student in groupStudents)
+                {
+                    allRecords.Add(new StudentPerformanceRecord
+                    {
+                        Student = student,
+                        Data = new CollaborationData(),
+                        Remarks = $"抓取失败: {errorMsg}"
+                    });
+                }
             }
         }
 
-        if (!allRecords.Any() && errors.Any())
+        // 把没有被包含在配置中的零散学生也加进去（如果有的话）
+        var processedStudentIds = allRecords.Select(r => r.Student.StudentId).ToHashSet();
+        var unprocessedStudents = students.Where(s => !processedStudentIds.Contains(s.StudentId));
+        foreach (var student in unprocessedStudents)
         {
-            throw new Exception("所有小组抓取均失败：\n" + string.Join("\n", errors));
+             allRecords.Add(new StudentPerformanceRecord
+             {
+                 Student = student,
+                 Data = new CollaborationData(),
+                 Remarks = "未找到所属小组的仓库配置"
+             });
         }
 
         return allRecords

@@ -7,7 +7,7 @@
         xmlns:viewmodels="clr-namespace:Git2Auditor.ViewModels"
         d:DataContext="{d:DesignInstance Type=viewmodels:MainViewModel}"
         mc:Ignorable="d"
-        Title="Git2Auditor - 开源协作数据监控 Agent" Height="800" Width="1280"
+        Title="Git2Auditor - 开源协作数据监控 Agent" Height="900" Width="1500"
         Background="#1E1E1E" Foreground="#D4D4D4" FontFamily="Segoe UI" WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
@@ -72,7 +72,7 @@
                 <Grid Grid.Row="0" Margin="0,0,0,15">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="300"/>
+                        <ColumnDefinition Width="700"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
@@ -82,16 +82,16 @@
                     <TextBlock Text="GitHub PAT (Token):" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <TextBox Grid.Column="1" Text="{Binding Pat, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"/>
                     
-                    <Button Grid.Column="3" Content="导入名单 (Import)" Command="{Binding ImportStudentsCommand}" Margin="10,0,0,0"/>
-                    <Button Grid.Column="4" Content="并发抓取 (Fetch)" Command="{Binding FetchDataCommand}" Margin="10,0,0,0"/>
-                    <Button Grid.Column="5" Content="导出台账 (Export)" Command="{Binding ExportExcelCommand}" Margin="10,0,0,0"/>
+                    <Button Grid.Column="3" Content="导入名单 (Import)" Command="{Binding ImportStudentsCommand}" Margin="10,0,0,0" Padding="20" Cursor=""/>
+                    <Button Grid.Column="4" Content="并发抓取 (Fetch)" Command="{Binding FetchDataCommand}" Margin="10,0,0,0"  Padding="20"/>
+                    <Button Grid.Column="5" Content="导出台账 (Export)" Command="{Binding ExportExcelCommand}" Margin="10,0,0,0"  Padding="20" Cursor="Hand"/>
                 </Grid>
 
                 <!-- 各小组仓库配置 -->
                 <ItemsControl Grid.Row="1" ItemsSource="{Binding GroupConfigs}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <UniformGrid Columns="4"/>
+                            <WrapPanel Orientation="Horizontal" Margin="0,-10,-10,0"/>
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
@@ -168,6 +168,7 @@
                     <DataGridTextColumn Header="解决率" Binding="{Binding Data.IssueResolveRate, StringFormat={}{0}%}" Width="80"/>
                     <DataGridTextColumn Header="参与PR" Binding="{Binding Data.PrsParticipated}" Width="80"/>
                     <DataGridTextColumn Header="健康度" Binding="{Binding Data.HealthScore}" Width="80"/>
+                    <DataGridTextColumn Header="备注" Binding="{Binding Remarks}" Width="*" Foreground="#E51400"/>
                 </DataGrid.Columns>
             </DataGrid>
 

@@ -83,13 +83,6 @@ public partial class MainViewModel : ObservableObject
     public MainViewModel(IGitHubApiService gitHubService)
     {
         _gitHubService = gitHubService;
-        
-        // 初始默认配置
-        for (int i = 1; i <= 4; i++)
-        {
-            GroupConfigs.Add(new GroupRepoConfig { GroupId = i });
-        }
-
         LoadLocalData();
     }
 
@@ -180,6 +173,19 @@ public partial class MainViewModel : ObservableObject
                         Data = new CollaborationData()
                     });
                 }
+                
+                // 动态生成小组仓库配置界面
+                var groupIds = Students.Select(s => s.GroupId).Distinct().OrderBy(g => g).ToList();
+                var existingConfigs = GroupConfigs.ToDictionary(c => c.GroupId, c => c);
+                GroupConfigs.Clear();
+                foreach (var gid in groupIds)
+                {
+                    if (existingConfigs.TryGetValue(gid, out var config))
+                        GroupConfigs.Add(config);
+                    else
+                        GroupConfigs.Add(new GroupRepoConfig { GroupId = gid });
+                }
+
                 SaveLocalData();
                 StatusMessage = $"成功导入 {Students.Count} 名学生，存档已更新。";
             }
@@ -206,7 +212,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         IsBusy = true;
-        StatusMessage = "正在并发抓取 4 个小组的 GitHub 协作数据...";
+        StatusMessage = $"正在并发抓取 {GroupConfigs.Count} 个小组的 GitHub 协作数据...";
         
         try
         {
@@ -299,7 +305,7 @@ public partial class MainViewModel : ObservableObject
                     var sheet = workbook.Worksheets.Add("开源协作数据台账");
 
                     // 1. 设置表头
-                    string[] headers = { "组别", "角色", "学号", "姓名", "GitHub账号", "Commit总数", "分派Issue", "解决Issue", "Issue解决率(%)", "参与PR", "PR讨论数", "健康度" };
+                    string[] headers = { "组别", "角色", "学号", "姓名", "GitHub账号", "Commit总数", "分派Issue", "解决Issue", "Issue解决率(%)", "参与PR", "PR讨论数", "健康度", "备注" };
                     for (int i = 0; i < headers.Length; i++)
                     {
                         var cell = sheet.Cell(1, i + 1);
@@ -326,6 +332,7 @@ public partial class MainViewModel : ObservableObject
                         sheet.Cell(row, 10).Value = r.Data.PrsParticipated;
                         sheet.Cell(row, 11).Value = r.Data.PrDiscussionCount;
                         sheet.Cell(row, 12).Value = r.Data.HealthScore;
+                        sheet.Cell(row, 13).Value = r.Remarks;
                         row++;
                     }
 
