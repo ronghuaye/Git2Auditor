@@ -6,5 +6,5 @@ namespace Git2Auditor.Services;
 
 public interface IGitHubApiService
 {
-    Task<List<StudentPerformanceRecord>> FetchAndAggregateDataAsync(string pat, List<GroupRepoConfig> groupConfigs, List<StudentInfo> students);
+    Task<(List<GroupHealthData> GroupHealths, List<StudentPerformanceRecord> IndividualRecords)> FetchAndAggregateDataAsync(string pat, List<GroupRepoConfig> groupConfigs, List<StudentInfo> students);
 }

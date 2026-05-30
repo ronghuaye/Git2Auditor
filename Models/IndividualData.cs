@@ -2,7 +2,7 @@ using System;
 
 namespace Git2Auditor.Models;
 
-public class CollaborationData
+public class IndividualData
 {
     // Commit 维度
     public int CommitsCount { get; set; }
@@ -19,13 +19,16 @@ public class CollaborationData
     public double PrAverageMergeTimeHours { get; set; }
     public int PrDiscussionCount { get; set; }
 
-    // 综合健康度计算 (满分 100 分，按特定权重聚合)
-    public double HealthScore { get; set; }
+    // 综合得分 (原本叫 HealthScore)
+    public double IndividualScore { get; set; }
 }
 
 public class StudentPerformanceRecord
 {
     public StudentInfo Student { get; set; } = new();
-    public CollaborationData Data { get; set; } = new();
+    public IndividualData Data { get; set; } = new();
     public string Remarks { get; set; } = string.Empty;
+    
+    // 预警标识：是否属于“单体英雄主义”包揽者
+    public bool IsSoloHero { get; set; }
 }

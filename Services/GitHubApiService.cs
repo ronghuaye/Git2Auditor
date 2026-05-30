@@ -9,7 +9,7 @@ namespace Git2Auditor.Services;
 
 public class GitHubApiService : IGitHubApiService
 {
-    public async Task<List<StudentPerformanceRecord>> FetchAndAggregateDataAsync(string pat, List<GroupRepoConfig> groupConfigs, List<StudentInfo> students)
+    public async Task<(List<GroupHealthData> GroupHealths, List<StudentPerformanceRecord> IndividualRecords)> FetchAndAggregateDataAsync(string pat, List<GroupRepoConfig> groupConfigs, List<StudentInfo> students)
     {
         var github = new GitHubClient(new ProductHeaderValue("Git2Auditor-Agent"))
         {
@@ -17,55 +17,139 @@ public class GitHubApiService : IGitHubApiService
         };
 
         var allRecords = new List<StudentPerformanceRecord>();
+        var groupHealths = new List<GroupHealthData>();
 
-        // 为了保证所有学生都能显示在表格中，按组别循环之前，先确保每个学生都有一个默认记录
         foreach (var config in groupConfigs)
         {
             var groupStudents = students.Where(s => s.GroupId == config.GroupId).ToList();
-            if (!groupStudents.Any()) continue;
+            var groupHealth = new GroupHealthData { GroupId = config.GroupId };
 
             var (owner, repo) = ParseOwnerAndRepo(config.RepoOwner, config.RepoName);
+            groupHealth.RepoOwner = owner;
+            groupHealth.RepoName = repo;
 
-            // 1. 仓库未配置检查
             if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo))
             {
                 foreach (var student in groupStudents)
                 {
-                    allRecords.Add(new StudentPerformanceRecord
-                    {
-                        Student = student,
-                        Data = new CollaborationData(),
-                        Remarks = "仓库地址未配置"
-                    });
+                    allRecords.Add(new StudentPerformanceRecord { Student = student, Remarks = "未配置仓库" });
                 }
+                groupHealths.Add(groupHealth);
                 continue;
             }
 
             try
             {
-                var commitsTask = github.Repository.Commit.GetAll(owner, repo);
+                // ==================== 宏观维度：小组整体指标评估 ====================
+                
+                var commits = await github.Repository.Commit.GetAll(owner, repo);
+                
+                // 维度 1: CI/CD 综合得分
+                groupHealth.CICDScore = 0;
+                try
+                {
+                    var workflows = await github.Actions.Workflows.List(owner, repo);
+                    if (workflows.TotalCount > 0)
+                    {
+                        double workflowCountScore = Math.Min(40, workflows.TotalCount * 10);
+                        var runs = await github.Actions.Workflows.Runs.List(owner, repo);
+                        double runFrequencyScore = Math.Min(30, runs.TotalCount * 2);
+                        double successRate = runs.TotalCount > 0 ? (double)runs.WorkflowRuns.Count(r => r.Conclusion == WorkflowRunConclusion.Success) / runs.TotalCount : 0;
+                        double successScore = successRate * 30;
+                        groupHealth.CICDScore = Math.Round(workflowCountScore + runFrequencyScore + successScore, 1);
+                    }
+                }
+                catch { /* 无 Actions 或 权限 */ }
+
+                // 维度 2: 文档完善度
+                groupHealth.DocumentationScore = 0;
+                try
+                {
+                    var readme = await github.Repository.Content.GetReadme(owner, repo);
+                    if (readme != null)
+                    {
+                        int length = readme.Content?.Length ?? 0;
+                        if (length > 500) groupHealth.DocumentationScore = 80;
+                        if (length > 2000) groupHealth.DocumentationScore = 100;
+                    }
+                }
+                catch { /* 无 README */ }
+
+                // ==================== 微观维度：个人协作指标评估 ====================
+                
                 var issuesTask = github.Issue.GetAllForRepository(owner, repo, new RepositoryIssueRequest { State = ItemStateFilter.All });
                 var prsTask = github.PullRequest.GetAllForRepository(owner, repo, new PullRequestRequest { State = ItemStateFilter.All });
 
-                await Task.WhenAll(commitsTask, issuesTask, prsTask);
+                await Task.WhenAll(issuesTask, prsTask);
 
-                var commits = commitsTask.Result;
                 var issues = issuesTask.Result.Where(i => i.PullRequest == null).ToList();
                 var prs = prsTask.Result;
 
+                // 维度 3: PR 活跃度与质量评估
+                try
+                {
+                    double prCountScore = Math.Min(40, prs.Count * 5.0); 
+                    double mergedPrsCount = prs.Count(p => p.Merged);
+                    double mergeRateScore = prs.Any() ? (mergedPrsCount / prs.Count * 40.0) : 0;
+                    double avgComments = prs.Any() ? prs.Average(p => p.Comments) : 0;
+                    double discussionScore = Math.Min(20, avgComments * 5.0);
+
+                    groupHealth.PRActivityScore = Math.Round(prCountScore + mergeRateScore + discussionScore, 1);
+                }
+                catch { groupHealth.PRActivityScore = 0; }
+
+                // 维度 4: Issue 管理评估
+                try
+                {
+                    double issueCountScore = Math.Min(40, issues.Count * 4.0);
+                    double closedIssues = issues.Count(i => i.State == ItemState.Closed);
+                    double resolutionRateScore = issues.Any() ? (closedIssues / issues.Count * 60.0) : 0;
+                    groupHealth.IssueScore = Math.Round(issueCountScore + resolutionRateScore, 1);
+                }
+                catch { groupHealth.IssueScore = 0; }
+
+                // 维度 5: 代码审核质量
+                try
+                {
+                    if (prs.Any())
+                    {
+                        int reviewedPrs = 0;
+                        int approvedPrs = 0;
+                        int totalPeerComments = 0;
+
+                        var recentPrs = prs.Take(10).ToList();
+                        foreach (var pr in recentPrs)
+                        {
+                            var reviews = await github.PullRequest.Review.GetAll(owner, repo, pr.Number);
+                            if (reviews.Any())
+                            {
+                                reviewedPrs++;
+                                if (reviews.Any(r => r.State == PullRequestReviewState.Approved && r.User.Login != pr.User.Login))
+                                    approvedPrs++;
+                                
+                                var reviewComments = await github.PullRequest.ReviewComment.GetAll(owner, repo, pr.Number);
+                                totalPeerComments += reviewComments.Count(c => c.User.Login != pr.User.Login);
+                            }
+                        }
+
+                        double reviewCoverageScore = (double)reviewedPrs / recentPrs.Count * 40;
+                        double approvalScore = (double)approvedPrs / recentPrs.Count * 30;
+                        double peerCommentScore = Math.Min(30, (double)totalPeerComments / recentPrs.Count * 10);
+
+                        groupHealth.CodeReviewScore = Math.Round(reviewCoverageScore + approvalScore + peerCommentScore, 1);
+                    }
+                }
+                catch { groupHealth.CodeReviewScore = 0; }
+
+                groupHealths.Add(groupHealth);
+
+                // 个人明细处理
                 foreach (var student in groupStudents)
                 {
                     var username = student.GitHubUsername.Trim().ToLower();
-                    
-                    // 2. 账号未填写检查
                     if (string.IsNullOrEmpty(username))
                     {
-                        allRecords.Add(new StudentPerformanceRecord
-                        {
-                            Student = student,
-                            Data = new CollaborationData(),
-                            Remarks = "GitHub账号未填写"
-                        });
+                        allRecords.Add(new StudentPerformanceRecord { Student = student, Remarks = "账号未填写" });
                         continue;
                     }
 
@@ -73,111 +157,71 @@ public class GitHubApiService : IGitHubApiService
                     var studentIssuesAssigned = issues.Where(i => i.Assignees.Any(a => a.Login.ToLower() == username)).ToList();
                     var studentIssuesResolved = studentIssuesAssigned.Where(i => i.State == ItemState.Closed).ToList();
                     var studentPrs = prs.Where(p => p.User?.Login?.ToLower() == username).ToList();
-                    var mergedPrs = studentPrs.Where(p => p.MergedAt.HasValue).ToList();
                     
-                    double avgMergeHours = mergedPrs.Any()
-                        ? mergedPrs.Average(p => (p.MergedAt!.Value - p.CreatedAt).TotalHours)
-                        : 0;
-
-                    var data = new CollaborationData
+                    var data = new IndividualData
                     {
                         CommitsCount = studentCommits.Count,
                         IssuesAssigned = studentIssuesAssigned.Count,
                         IssuesResolved = studentIssuesResolved.Count,
                         PrsParticipated = studentPrs.Count,
-                        PrAverageMergeTimeHours = Math.Round(avgMergeHours, 1),
                         PrDiscussionCount = studentPrs.Sum(p => p.Comments)
                     };
 
-                    data.HealthScore = CalculateHealthScore(data);
+                    data.IndividualScore = CalculateHealthScore(data);
 
-                    // 3. 如果数据全为0，提示可能是账号错误
                     string remark = "";
-                    if (data.CommitsCount == 0 && data.IssuesAssigned == 0 && data.PrsParticipated == 0)
+                    bool isSoloHero = false;
+                    if (data.CommitsCount > 0 && commits.Count > 0)
                     {
-                        remark = "无活动记录，请核对账号是否正确";
+                        double commitShare = (double)data.CommitsCount / commits.Count;
+                        if (commitShare > 0.6 && groupStudents.Count > 2)
+                        {
+                            isSoloHero = true;
+                            remark = $"⚠️单体英雄：包揽了小组 {commitShare:P0} 的提交";
+                        }
                     }
 
                     allRecords.Add(new StudentPerformanceRecord
                     {
                         Student = student,
                         Data = data,
-                        Remarks = remark
+                        Remarks = remark,
+                        IsSoloHero = isSoloHero
                     });
                 }
             }
             catch (Exception ex)
             {
-                // 4. API 异常处理（如仓库名错误，404等）
-                string errorMsg = ex.Message.Length > 30 ? ex.Message.Substring(0, 30) + "..." : ex.Message;
+                groupHealths.Add(groupHealth);
                 foreach (var student in groupStudents)
                 {
-                    allRecords.Add(new StudentPerformanceRecord
-                    {
-                        Student = student,
-                        Data = new CollaborationData(),
-                        Remarks = $"抓取失败: {errorMsg}"
-                    });
+                    allRecords.Add(new StudentPerformanceRecord { Student = student, Remarks = $"抓取异常: {ex.Message}" });
                 }
             }
         }
 
-        // 把没有被包含在配置中的零散学生也加进去（如果有的话）
-        var processedStudentIds = allRecords.Select(r => r.Student.StudentId).ToHashSet();
-        var unprocessedStudents = students.Where(s => !processedStudentIds.Contains(s.StudentId));
-        foreach (var student in unprocessedStudents)
-        {
-             allRecords.Add(new StudentPerformanceRecord
-             {
-                 Student = student,
-                 Data = new CollaborationData(),
-                 Remarks = "未找到所属小组的仓库配置"
-             });
-        }
-
-        return allRecords
-            .OrderBy(r => r.Student.GroupId)
-            .ThenByDescending(r => r.Student.IsLeader)
-            .ThenByDescending(r => r.Data.HealthScore)
-            .ToList();
+        return (groupHealths, allRecords);
     }
 
-    /// <summary>
-    /// 智能解析器：处理用户输入的各种形态的 Repo 地址
-    /// </summary>
     private (string owner, string repo) ParseOwnerAndRepo(string inputOwner, string inputRepo)
     {
         string owner = inputOwner?.Trim() ?? "";
         string repo = inputRepo?.Trim() ?? "";
-
-        // 如果 Repo 框里填的是完整网址
         if (repo.Contains("github.com/"))
         {
             var parts = repo.Split(new[] { "github.com/" }, StringSplitOptions.None)[1].Split('/');
-            if (parts.Length >= 2)
-            {
-                owner = parts[0];
-                repo = parts[1];
-            }
+            if (parts.Length >= 2) { owner = parts[0]; repo = parts[1]; }
         }
-        // 如果 Owner 框里填的是完整网址
         else if (owner.Contains("github.com/"))
         {
-             var parts = owner.Split(new[] { "github.com/" }, StringSplitOptions.None)[1].Split('/');
-            if (parts.Length >= 2)
-            {
-                owner = parts[0];
-                repo = parts[1];
-            }
+            var parts = owner.Split(new[] { "github.com/" }, StringSplitOptions.None)[1].Split('/');
+            if (parts.Length >= 2) { owner = parts[0]; repo = parts[1]; }
         }
-
-        // 去掉末尾的 .git 标识
         if (repo.EndsWith(".git")) repo = repo.Substring(0, repo.Length - 4);
-
         return (owner, repo);
     }
 
-    private double CalculateHealthScore(CollaborationData data)
+    private double CalculateHealthScore(IndividualData data)
     {
         double score = 0;
         score += Math.Min(30, data.CommitsCount * 0.5);

@@ -5,14 +5,17 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
         xmlns:viewmodels="clr-namespace:Git2Auditor.ViewModels"
+        xmlns:converters="clr-namespace:Git2Auditor.Converters"
         d:DataContext="{d:DesignInstance Type=viewmodels:MainViewModel}"
         mc:Ignorable="d"
-        Title="Git2Auditor - 开源协作数据监控 Agent" Height="900" Width="1500"
+        Title="Git2Auditor - 开源协作与架构健康度评估系统" Height="900" Width="1350"
         Background="#1E1E1E" Foreground="#D4D4D4" FontFamily="Segoe UI" WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <converters:SoloHeroToBrushConverter x:Key="SoloHeroToBrushConverter"/>
+        <converters:RadarSeriesConverter x:Key="RadarSeriesConverter"/>
+        <converters:GroupMatchToHighlightConverter x:Key="GroupMatchToHighlightConverter"/>
         
         <Style TargetType="Button">
             <Setter Property="Background" Value="#2D2D30"/>
@@ -83,9 +86,9 @@
                     <TextBlock Text="GitHub PAT (Token):" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <TextBox Grid.Column="1" Text="{Binding Pat, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"/>
                     
-                    <Button Grid.Column="3" Content="导入名单 (Import)" Command="{Binding ImportStudentsCommand}" Margin="10,0,0,0" Padding="20" Cursor=""/>
-                    <Button Grid.Column="4" Content="并发抓取 (Fetch)" Command="{Binding FetchDataCommand}" Margin="10,0,0,0"  Padding="20"/>
-                    <Button Grid.Column="5" Content="导出台账 (Export)" Command="{Binding ExportExcelCommand}" Margin="10,0,0,0"  Padding="20" Cursor="Hand"/>
+                    <Button Grid.Column="3" Content="导入名单" Command="{Binding ImportStudentsCommand}" Margin="10,0,0,0" Padding="20"/>
+                    <Button Grid.Column="4" Content="并发抓取" Command="{Binding FetchDataCommand}" Margin="10,0,0,0" Padding="20"/>
+                    <Button Grid.Column="5" Content="导出台账" Command="{Binding ExportExcelCommand}" Margin="10,0,0,0" Padding="20"/>
                 </Grid>
 
                 <!-- 各小组仓库配置 -->
@@ -111,7 +114,7 @@
                                         </Grid.RowDefinitions>
                                         
                                         <TextBlock Text="Owner:" VerticalAlignment="Center" Margin="0,0,5,5" FontSize="11"/>
-                                        <TextBox Grid.Column="1" Text="{Binding RepoOwner, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" FontSize="11" Background="#1E1E1E"/>
+                                        <TextBox Grid.Column="1" Text="{Binding RepoOwner, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" FontSize="11" Background="#1E1E1E" Width="100"/>
                                         
                                         <TextBlock Grid.Row="1" Text="Repo:" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="11"/>
                                         <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding RepoName, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Background="#1E1E1E"/>
@@ -124,7 +127,7 @@
             </Grid>
         </Border>
 
-        <!-- 主体数据区 -->
+        <!-- 主体数据区（上下分层） -->
         <Grid Grid.Row="1" Margin="0,15,0,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -132,41 +135,87 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- 界面上层：宏观看板 (雷达图) -->
+            <!-- 界面上层：宏观看板 (多独立雷达图) -->
             <Grid Grid.Row="0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="300"/>
                 </Grid.ColumnDefinitions>
                 
-                <Border BorderBrush="#333333" BorderThickness="1" Background="#252526" Height="300">
+                <Border BorderBrush="#333333" BorderThickness="1" Background="#252526" Height="260">
                     <Grid>
-                        <TextBlock Text="各小组整体架构健康度 (多维对抗)" Foreground="#888888" Margin="15" HorizontalAlignment="Left" VerticalAlignment="Top"/>
-                        <lvc:PolarChart Series="{Binding RadarSeries}" AngleAxes="{Binding RadarAxes}" RadiusAxes="{Binding RadiusAxes}" TooltipTextPaint="{Binding TooltipTextPaint}" Margin="20,40,20,20" />
+                        <TextBlock Text="各小组健康度透视 (独立维度评估)" Foreground="#888888" Margin="15,10" HorizontalAlignment="Left" VerticalAlignment="Top" FontSize="11"/>
+                        
+                        <ListBox x:Name="GroupsListBox" ItemsSource="{Binding GroupHealthList}" SelectedItem="{Binding SelectedGroup}" 
+                                 Background="Transparent" BorderThickness="0" Margin="10,30,10,10"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 SelectionChanged="GroupsListBox_SelectionChanged">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="4"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <Border x:Name="OuterBorder" BorderBrush="#3F3F46" BorderThickness="1" Background="#1E1E1E" Width="180" Height="195" CornerRadius="4">
+                                                    <ContentPresenter/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter TargetName="OuterBorder" Property="BorderBrush" Value="#007ACC"/>
+                                                        <Setter TargetName="OuterBorder" Property="BorderThickness" Value="2"/>
+                                                        <Setter TargetName="OuterBorder" Property="Background" Value="#2D2D30"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="OuterBorder" Property="BorderBrush" Value="#505050"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="{Binding GroupId, StringFormat='第 {0} 小组'}" HorizontalAlignment="Center" Margin="0,5,0,0" FontWeight="Bold" Foreground="#D4D4D4" FontSize="11"/>
+                                        <lvc:PolarChart Grid.Row="1" 
+                                                      Series="{Binding RadarValues, Converter={StaticResource RadarSeriesConverter}}" 
+                                                      AngleAxes="{Binding DataContext.RadarAxes, RelativeSource={RelativeSource AncestorType=Window}}" 
+                                                      RadiusAxes="{Binding DataContext.RadiusAxes, RelativeSource={RelativeSource AncestorType=Window}}" 
+                                                      TooltipPosition="Hidden"
+                                                      Height="155"
+                                                      Margin="0,5,0,0"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
                     </Grid>
                 </Border>
 
-                <!-- 组别选择器 -->
-                <Border Grid.Column="1" BorderBrush="#333333" BorderThickness="1" Background="#252526" Margin="15,0,0,0" Padding="15">
+                <!-- 组别穿透看板 -->
+                <Border Grid.Column="1" BorderBrush="#333333" BorderThickness="1" Background="#252526" Margin="15,0,0,0" Padding="15,10">
                     <StackPanel>
-                        <TextBlock Text="穿透分析 (选择小组)" Foreground="#888888" Margin="0,0,0,15"/>
-                        <ComboBox ItemsSource="{Binding GroupHealthList}" SelectedItem="{Binding SelectedGroup}" 
-                                  Background="#1E1E1E" Foreground="#D4D4D4" BorderBrush="#333333" Padding="8">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding GroupId, StringFormat='第 {0} 小组个人明细'}"/>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-
-                        <StackPanel Margin="0,20,0,0" DataContext="{Binding SelectedGroup}">
-                            <TextBlock Text="选中组架构概览：" Foreground="#007ACC" FontWeight="Bold" Margin="0,0,0,10"/>
-                            <TextBlock Text="{Binding CICDScore, StringFormat='CI/CD 综合得分: {0}'}" Margin="0,5"/>
-                            <TextBlock Text="{Binding PRActivityScore, StringFormat='PR 活跃度: {0}分'}" Margin="0,5"/>
-                            <TextBlock Text="{Binding CodeReviewScore, StringFormat='代码审核评分: {0}分'}" Margin="0,5"/>
-                            <TextBlock Text="{Binding DocumentationScore, StringFormat='文档完善度: {0}%'}" Margin="0,5"/>
-                            <TextBlock Text="{Binding IssueScore, StringFormat='Issue 管理: {0}分'}" Margin="0,5"/>
-                            <TextBlock Text="{Binding GroupHealthScore, StringFormat='⭐ 综合得分: {0:F1}'}" FontWeight="Bold" Margin="0,15,0,0" Foreground="DarkOrange" FontSize="16"/>
+                        <TextBlock Text="穿透分析 (选择左侧卡片)" Foreground="#888888" Margin="0,0,0,10" FontSize="11"/>
+                        
+                        <StackPanel Margin="0,5,0,0" DataContext="{Binding SelectedGroup}">
+                            <TextBlock Text="{Binding GroupId, StringFormat='第 {0} 小组概览：'}" Foreground="#007ACC" FontWeight="Bold" Margin="0,0,0,8" FontSize="13"/>
+                            <TextBlock Text="{Binding CICDScore, StringFormat='CI/CD 综合得分: {0}'}" Margin="0,3" FontSize="12"/>
+                            <TextBlock Text="{Binding PRActivityScore, StringFormat='PR 活跃度: {0}分'}" Margin="0,3" FontSize="12"/>
+                            <TextBlock Text="{Binding CodeReviewScore, StringFormat='代码审核评分: {0}分'}" Margin="0,3" FontSize="12"/>
+                            <TextBlock Text="{Binding DocumentationScore, StringFormat='文档完善度: {0}%'}" Margin="0,3" FontSize="12"/>
+                            <TextBlock Text="{Binding IssueScore, StringFormat='Issue 管理: {0}分'}" Margin="0,3" FontSize="12"/>
+                            <Separator Background="#333333" Margin="0,10"/>
+                            <TextBlock Text="{Binding GroupHealthScore, StringFormat='⭐ 综合得分: {0:F1}'}" FontWeight="Bold" Margin="0,2,0,0" Foreground="DarkOrange" FontSize="16"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -176,7 +225,7 @@
             <Border Grid.Row="1" Height="1" Background="#333333" VerticalAlignment="Center" Margin="0,7"/>
 
             <!-- 界面下层：微观穿透 (个人明细表格) -->
-            <DataGrid Grid.Row="2" ItemsSource="{Binding DisplayedRecords}"
+            <DataGrid x:Name="StudentsGrid" Grid.Row="2" ItemsSource="{Binding DisplayedRecords}"
                       AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                       Background="Transparent" RowBackground="#1E1E1E" AlternatingRowBackground="#252526"
                       Foreground="#D4D4D4" BorderBrush="#333333" BorderThickness="1"
@@ -193,8 +242,9 @@
                     </Style>
                 </DataGrid.Resources>
                 <DataGrid.RowStyle>
-                    <!-- 通过 Converter 实现单体英雄主义高亮预警 -->
                     <Style TargetType="DataGridRow">
+                        <Setter Property="Background" Value="{Binding IsSoloHero, Converter={StaticResource SoloHeroToBrushConverter}}"/>
+                        <Setter Property="ToolTip" Value="{Binding Remarks}"/>
                         <Style.Triggers>
                             <!-- 当行所属小组与选中小组匹配时高亮 -->
                             <DataTrigger Value="True">
@@ -218,7 +268,7 @@
                             </Trigger>
                         </Style.Triggers>
                     </Style>
-                </DataGrid.Resources>
+                </DataGrid.RowStyle>
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="组别" Binding="{Binding Student.GroupId}" Width="60"/>
                     <DataGridTextColumn Header="姓名" Binding="{Binding Student.Name}" Width="80"/>
@@ -228,21 +278,14 @@
                     <DataGridTextColumn Header="分配Issue" Binding="{Binding Data.IssuesAssigned}" Width="90"/>
                     <DataGridTextColumn Header="解决率" Binding="{Binding Data.IssueResolveRate, StringFormat={}{0}%}" Width="80"/>
                     <DataGridTextColumn Header="参与PR" Binding="{Binding Data.PrsParticipated}" Width="80"/>
-                    <DataGridTextColumn Header="健康度" Binding="{Binding Data.HealthScore}" Width="80"/>
-                    <DataGridTextColumn Header="备注" Binding="{Binding Remarks}" Width="*" Foreground="#E51400"/>
+                    <DataGridTextColumn Header="PR沟通" Binding="{Binding Data.PrDiscussionCount}" Width="80"/>
+                    <DataGridTextColumn Header="综合得分" Binding="{Binding Data.IndividualScore}" Width="80" FontWeight="Bold" Foreground="DarkOrange"/>
+                    <DataGridTextColumn Header="备注/预警" Binding="{Binding Remarks}" Width="*" Foreground="#E51400" FontWeight="Bold"/>
                 </DataGrid.Columns>
             </DataGrid>
-
-            <Border Grid.Column="1" Width="1" Background="#333333" HorizontalAlignment="Center" Margin="0,10"/>
-
-            <Border Grid.Column="2" BorderBrush="#333333" BorderThickness="1" Background="#252526">
-                <Grid>
-                    <TextBlock Text="个体协作多维画像" Foreground="#888888" Margin="15" HorizontalAlignment="Left" VerticalAlignment="Top"/>
-                    <lvc:PolarChart Series="{Binding RadarSeries}" AngleAxes="{Binding RadarAxes}" RadiusAxes="{Binding RadiusAxes}" TooltipTextPaint="{Binding TooltipTextPaint}" Margin="20,40,20,20" />
-                </Grid>
-            </Border>
         </Grid>
 
+        <!-- 底部状态栏 -->
         <StatusBar Grid.Row="2" Background="#007ACC" Foreground="#FFFFFF" Margin="-20,15,-20,-20" Padding="20,5">
             <StatusBarItem>
                 <TextBlock Text="{Binding StatusMessage}"/>
