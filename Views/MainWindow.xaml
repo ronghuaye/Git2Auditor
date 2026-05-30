@@ -12,6 +12,7 @@
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <converters:SoloHeroToBrushConverter x:Key="SoloHeroToBrushConverter"/>
         
         <Style TargetType="Button">
             <Setter Property="Background" Value="#2D2D30"/>
@@ -125,13 +126,57 @@
 
         <!-- 主体数据区 -->
         <Grid Grid.Row="1" Margin="0,15,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="6.5*"/>
-                <ColumnDefinition Width="15"/>
-                <ColumnDefinition Width="3.5*"/>
-            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="15"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-            <DataGrid Grid.Column="0" ItemsSource="{Binding Records}" SelectedItem="{Binding SelectedRecord}"
+            <!-- 界面上层：宏观看板 (雷达图) -->
+            <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="300"/>
+                </Grid.ColumnDefinitions>
+                
+                <Border BorderBrush="#333333" BorderThickness="1" Background="#252526" Height="300">
+                    <Grid>
+                        <TextBlock Text="各小组整体架构健康度 (多维对抗)" Foreground="#888888" Margin="15" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                        <lvc:PolarChart Series="{Binding RadarSeries}" AngleAxes="{Binding RadarAxes}" RadiusAxes="{Binding RadiusAxes}" TooltipTextPaint="{Binding TooltipTextPaint}" Margin="20,40,20,20" />
+                    </Grid>
+                </Border>
+
+                <!-- 组别选择器 -->
+                <Border Grid.Column="1" BorderBrush="#333333" BorderThickness="1" Background="#252526" Margin="15,0,0,0" Padding="15">
+                    <StackPanel>
+                        <TextBlock Text="穿透分析 (选择小组)" Foreground="#888888" Margin="0,0,0,15"/>
+                        <ComboBox ItemsSource="{Binding GroupHealthList}" SelectedItem="{Binding SelectedGroup}" 
+                                  Background="#1E1E1E" Foreground="#D4D4D4" BorderBrush="#333333" Padding="8">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding GroupId, StringFormat='第 {0} 小组个人明细'}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <StackPanel Margin="0,20,0,0" DataContext="{Binding SelectedGroup}">
+                            <TextBlock Text="选中组架构概览：" Foreground="#007ACC" FontWeight="Bold" Margin="0,0,0,10"/>
+                            <TextBlock Text="{Binding CICDScore, StringFormat='CI/CD 综合得分: {0}'}" Margin="0,5"/>
+                            <TextBlock Text="{Binding PRActivityScore, StringFormat='PR 活跃度: {0}分'}" Margin="0,5"/>
+                            <TextBlock Text="{Binding CodeReviewScore, StringFormat='代码审核评分: {0}分'}" Margin="0,5"/>
+                            <TextBlock Text="{Binding DocumentationScore, StringFormat='文档完善度: {0}%'}" Margin="0,5"/>
+                            <TextBlock Text="{Binding IssueScore, StringFormat='Issue 管理: {0}分'}" Margin="0,5"/>
+                            <TextBlock Text="{Binding GroupHealthScore, StringFormat='⭐ 综合得分: {0:F1}'}" FontWeight="Bold" Margin="0,15,0,0" Foreground="DarkOrange" FontSize="16"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- 极简视觉分割线 -->
+            <Border Grid.Row="1" Height="1" Background="#333333" VerticalAlignment="Center" Margin="0,7"/>
+
+            <!-- 界面下层：微观穿透 (个人明细表格) -->
+            <DataGrid Grid.Row="2" ItemsSource="{Binding DisplayedRecords}"
                       AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                       Background="Transparent" RowBackground="#1E1E1E" AlternatingRowBackground="#252526"
                       Foreground="#D4D4D4" BorderBrush="#333333" BorderThickness="1"
@@ -146,8 +191,24 @@
                         <Setter Property="BorderBrush" Value="#333333"/>
                         <Setter Property="BorderThickness" Value="0,0,1,1"/>
                     </Style>
+                </DataGrid.Resources>
+                <DataGrid.RowStyle>
+                    <!-- 通过 Converter 实现单体英雄主义高亮预警 -->
                     <Style TargetType="DataGridRow">
                         <Style.Triggers>
+                            <!-- 当行所属小组与选中小组匹配时高亮 -->
+                            <DataTrigger Value="True">
+                                <DataTrigger.Binding>
+                                    <MultiBinding Converter="{StaticResource GroupMatchToHighlightConverter}">
+                                        <Binding Path="Student.GroupId"/>
+                                        <Binding Path="DataContext.SelectedGroup.GroupId" RelativeSource="{RelativeSource AncestorType=DataGrid}"/>
+                                    </MultiBinding>
+                                </DataTrigger.Binding>
+                                <Setter Property="Background" Value="#2D2D30"/>
+                                <Setter Property="BorderBrush" Value="#007ACC"/>
+                                <Setter Property="BorderThickness" Value="0,1,0,1"/>
+                            </DataTrigger>
+                            
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter Property="Background" Value="#3E3E42"/>
                             </Trigger>

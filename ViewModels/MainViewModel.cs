@@ -29,6 +29,23 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private ObservableCollection<StudentInfo> students = new();
     [ObservableProperty] private ObservableCollection<StudentPerformanceRecord> records = new();
     [ObservableProperty] private ObservableCollection<GroupRepoConfig> groupConfigs = new();
+    
+    // 小组宏观健康度数据 (绑定到雷达图和下拉框)
+    [ObservableProperty] private ObservableCollection<GroupHealthData> groupHealthList = new();
+
+    private GroupHealthData? _selectedGroup;
+    public GroupHealthData? SelectedGroup
+    {
+        get => _selectedGroup;
+        set
+        {
+            if (SetProperty(ref _selectedGroup, value))
+            {
+                UpdateDisplayedRecords();
+                UpdateRadarChart(); // 切换小组时触发雷达图重绘高亮
+            }
+        }
+    }
 
     [ObservableProperty] private PolarAxis[] radiusAxes = 
     {
@@ -36,22 +53,18 @@ public partial class MainViewModel : ObservableObject
         { 
             LabelsRotation = 0,
             TextSize = 13,
-            LabelsPaint = new SolidColorPaint(SKColors.DodgerBlue)
-            {
-                FontFamily = "Microsoft YaHei"
-            },
+            LabelsPaint = new SolidColorPaint(SKColors.DodgerBlue) { FontFamily = "Microsoft YaHei" },
             SeparatorsPaint = new SolidColorPaint(new SKColor(60, 60, 60)) { StrokeThickness = 0.5f },
             MinLimit = 0,
             MaxLimit = 100
         }
     };
 
-    [ObservableProperty] private ISeries[] radarSeries = Array.Empty<ISeries>();
     [ObservableProperty] private PolarAxis[] radarAxes = 
     {
         new PolarAxis 
         { 
-            Labels = new[] { "代码提交", "Issue参与", "Issue解决率", "PR贡献", "PR沟通" },
+            Labels = new[] { "CI/CD综合得分", "PR活跃度", "代码审核", "文档完善度", "Issue管理" },
             TextSize = 15,
             LabelsPaint = new SolidColorPaint(SKColors.DodgerBlue)
             {
@@ -84,6 +97,8 @@ public partial class MainViewModel : ObservableObject
     {
         _gitHubService = gitHubService;
         LoadLocalData();
+        _selectedGroup = null; // 确保初始无选中
+        UpdateDisplayedRecords(); // 确保初始显示所有记录
     }
 
     private void LoadLocalData()
@@ -109,6 +124,13 @@ public partial class MainViewModel : ObservableObject
                     Records.Clear();
                     foreach (var r in data.Records) Records.Add(r);
                     
+                    GroupHealthList.Clear();
+                    if (data.GroupHealths != null)
+                    {
+                        foreach (var g in data.GroupHealths) GroupHealthList.Add(g);
+                    }
+                    
+                    UpdateRadarChart();
                     StatusMessage = $"已加载本地存档：{Students.Count} 名学生。";
                 }
             }
@@ -133,6 +155,18 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = $"保存本地存档失败: {ex.Message}";
+        }
+    }
+
+    private void UpdateDisplayedRecords()
+    {
+        DisplayedRecords.Clear();
+        if (SelectedGroup == null) return;
+        
+        var groupRecords = AllRecords.Where(r => r.Student.GroupId == SelectedGroup.GroupId);
+        foreach (var r in groupRecords)
+        {
+            DisplayedRecords.Add(r);
         }
     }
 
@@ -187,6 +221,11 @@ public partial class MainViewModel : ObservableObject
                 }
 
                 SaveLocalData();
+                UpdateRadarChart();
+                
+                // 自动选中第一个小组，触发数据绑定更新
+                SelectedGroup = GroupHealthList.FirstOrDefault();
+                
                 StatusMessage = $"成功导入 {Students.Count} 名学生，存档已更新。";
             }
             catch (Exception ex)
@@ -226,8 +265,10 @@ public partial class MainViewModel : ObservableObject
                     Records.Add(item);
                 }
                 SaveLocalData();
-                StatusMessage = $"数据抓取完成，共处理 {data.Count} 条活跃记录。";
-                SelectedRecord = Records.FirstOrDefault();
+                UpdateRadarChart();
+                
+                SelectedGroup = GroupHealthList.FirstOrDefault();
+                StatusMessage = $"数据抓取完成，共处理 {individualRecords.Count} 条记录与 {groupHealths.Count} 个仓库指标。";
             }
             else
             {
@@ -244,35 +285,51 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private void UpdateRadarChart(StudentPerformanceRecord? record)
+    private void UpdateRadarChart()
     {
-        if (record == null)
+        if (!GroupHealthList.Any())
         {
             RadarSeries = Array.Empty<ISeries>();
             return;
         }
 
-        // 统一缩放处理（归一化到 0-100）
-        RadarSeries = new ISeries[]
+        // 为每个小组生成一个雷达图多边形
+        var colors = new[] 
+        { 
+            SKColors.DodgerBlue, SKColors.Crimson, SKColors.ForestGreen, SKColors.DarkOrange, 
+            SKColors.MediumPurple, SKColors.Teal 
+        };
+
+        var series = new List<ISeries>();
+        for (int i = 0; i < GroupHealthList.Count; i++)
         {
-            new PolarLineSeries<double>
+            var group = GroupHealthList[i];
+            var color = colors[i % colors.Length];
+            
+            bool isSelected = SelectedGroup != null && group.GroupId == SelectedGroup.GroupId;
+            byte alphaFill = isSelected ? (byte)100 : (byte)15;
+            float strokeThick = isSelected ? 4f : 1.5f;
+            
+            series.Add(new PolarLineSeries<double>
             {
                 Values = new double[] 
                 { 
-                    Math.Min(100, record.Data.CommitsCount * 5), 
-                    Math.Min(100, record.Data.IssuesAssigned * 10), 
-                    record.Data.IssueResolveRate, 
-                    Math.Min(100, record.Data.PrsParticipated * 20), 
-                    Math.Min(100, record.Data.PrDiscussionCount * 10) 
+                    group.CICDScore, 
+                    group.PRActivityScore, 
+                    group.CodeReviewScore,
+                    group.DocumentationScore, 
+                    group.IssueScore
                 },
-                Name = record.Student.Name,
-                Stroke = new SolidColorPaint(SKColors.DodgerBlue) { StrokeThickness = 3 },
-                Fill = new SolidColorPaint(SKColors.DodgerBlue.WithAlpha(40)),
-                GeometrySize = 6,
-                GeometryFill = new SolidColorPaint(SKColors.DodgerBlue),
-                GeometryStroke = new SolidColorPaint(SKColors.White) { StrokeThickness = 1 }
-            }
-        };
+                Name = $"第 {group.GroupId} 组",
+                Stroke = new SolidColorPaint(color) { StrokeThickness = strokeThick },
+                Fill = new SolidColorPaint(color.WithAlpha(alphaFill)),
+                GeometrySize = isSelected ? 8 : 4,
+                GeometryFill = new SolidColorPaint(color),
+                GeometryStroke = new SolidColorPaint(SKColors.White) { StrokeThickness = 1 },
+                ZIndex = isSelected ? 100 : 0
+            });
+        }
+        RadarSeries = series.ToArray();
     }
 
     [RelayCommand]
